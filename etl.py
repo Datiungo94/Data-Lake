@@ -42,12 +42,12 @@ def process_song_data(spark,input_data, output_data):
     df = spark.read.json(input_data)
 
     # extract columns to create songs table
-    songs_table = df.select('song_id', 'title', 'artist_id', 'year', 'duration')
+    songs_table = df.select('song_id', 'title', 'artist_id', 'year', 'duration').dropDuplicates(['song_id'])
     # write songs table to parquet files partitioned by year and artist
-    songs_table.write.mode('overwrite').parquet(output_data + "/song_data/")
+    songs_table.write.partitionBy('year', 'artist_id').mode('overwrite').parquet(output_data + "/song_data/")
 
     # extract columns to create artists table
-    artists_table = df.select('artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude')
+    artists_table = df.select('artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude').dropDuplicates(['artist_id'])
     
     # write artists table to parquet files
     artists_table.write.mode('overwrite').parquet(output_data + '/artists/')
@@ -116,7 +116,7 @@ def process_log_data(spark, input_data, output_data):
 def main():
     spark = create_spark_session()
 
-    song_input_data = "s3://udacity-dend/song_data/*/*/*/*.son"
+    song_input_data = "s3://udacity-dend/song_data/*/*/*/*.json"
     log_input_data = "s3://udacity-dend/log_data/*/*/*.json"
     
     output_data = "s3://sparkify-project-songs"
