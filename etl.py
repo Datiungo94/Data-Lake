@@ -14,20 +14,6 @@ os.environ['AWS_ACCESS_KEY_ID']=config['AWS_ACCESS_KEY_ID']
 os.environ['AWS_SECRET_ACCESS_KEY']=config['AWS_SECRET_ACCESS_KEY']
 
 
-def create_spark_session():
-    """
-    This function create a Spark Session which is the entry point of programming Spark.
-    Args: None
-    
-    Returns: Spark
-    """
-    spark = SparkSession \
-        .builder \
-        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:2.7.0") \
-        .getOrCreate()
-    return spark
-
-
 def process_song_data(spark,input_data, output_data):
     """
     This function processes song data from a S3 bucket and extracts 2 tables in parquet format - songs and artists
@@ -44,13 +30,13 @@ def process_song_data(spark,input_data, output_data):
     # extract columns to create songs table
     songs_table = df.select('song_id', 'title', 'artist_id', 'year', 'duration').dropDuplicates(['song_id'])
     # write songs table to parquet files partitioned by year and artist
-    songs_table.write.partitionBy('year', 'artist_id').mode('overwrite').parquet(output_data + "/song_data/")
+    songs_table.write.partitionBy('year', 'artist_id').mode('overwrite').parquet(output_data + "/song_data/songs.parquet")
 
     # extract columns to create artists table
     artists_table = df.select('artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude').dropDuplicates(['artist_id'])
     
     # write artists table to parquet files
-    artists_table.write.mode('overwrite').parquet(output_data + '/artists/')
+    artists_table.write.mode('overwrite').parquet(output_data + '/artists/artists.parquet')
 
 
 def process_log_data(spark, input_data, output_data):
@@ -73,7 +59,7 @@ def process_log_data(spark, input_data, output_data):
     users_table = log_filtered_df.select('userId', 'firstName', 'lastName', 'gender', 'level').dropDuplicates(['userId'])
     
     # write users table to parquet files
-    users_table.write.mode('overwrite').parquet(output_data + '/users/')
+    users_table.write.mode('overwrite').parquet(output_data + '/users/users.parquet')
 
     # create timestamp column from original timestamp column
     # Columns ts is in milliseconds. Divide by 1000 to get the results in seconds and convert to Timestamp Type.
@@ -87,17 +73,17 @@ def process_log_data(spark, input_data, output_data):
                               weekofyear('tsconvert').alias('week'),
                               month('tsconvert').alias('month'),
                               year('tsconvert').alias('year'),
-                              date_format('tsconvert', 'EEEE').alias('weekday'))
+                              date_format('tsconvert', 'EEEE').alias('weekday')).dropDuplicates()
     
     # write time table to parquet files partitioned by year and month
-    time_table.write.partitionBy('year', 'month').mode('overwrite').parquet(output_data + '/time/')
+    time_table.write.partitionBy('year', 'month').mode('overwrite').parquet(output_data + '/time/time.parquet')
 
     # read in song data to use for songplays table
-    song_df = spark.read.parquet(output_data + "/song_data/*.parquet")
+    song_df = spark.read.parquet(output_data + "/song_data/songs.parquet")
     song_df.createOrReplaceTempView("songs_staging")
 
     # extract columns from joined song and log datasets to create songplays table 
-    songplays_table = spark.sql("""SELECT logs.tsconvert AS starttime, 
+    songplays_table = spark.sql("""SELECT DISTINCT logs.tsconvert AS starttime, 
                                           logs.userId, 
                                           logs.level, 
                                           songs.song_id, 
@@ -110,7 +96,7 @@ def process_log_data(spark, input_data, output_data):
         INNER JOIN log_staging AS logs ON logs.song = songs.title""")
 
     # write songplays table to parquet files partitioned by year and month
-    songplays_table.write.partitionBy('year', 'month').mode('overwrite').parquet(output_data + '/songplays/')
+    songplays_table.write.partitionBy('year', 'month').mode('overwrite').parquet(output_data + '/songplays/songplays.parquet')
 
 
 def main():
